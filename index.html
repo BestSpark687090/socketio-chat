@@ -104,15 +104,25 @@
           input.value = "";
         }
       });
-
+      socket.on("delete chat message", function (offset) {
+        let msg = document.getElementById(offset);
+        msg.remove();
+      });
       socket.on("chat message", (msg, serverOffset, username) => {
         const item = document.createElement("li");
         const content = document.createElement("div");
         const user = document.createElement("span");
         const message = document.createElement("span");
         content.classList.add("content");
+        item.addEventListener("contextmenu", function (e) {
+          e.preventDefault();
+          alert(serverOffset);
+          let deletionCode = prompt("enter deletion code:");
+          socket.emit("delete chat message", serverOffset, deletionCode);
+        });
         user.textContent = username + ": ";
         message.textContent = msg;
+        item.id = serverOffset;
         content.appendChild(user);
         content.appendChild(message);
         item.appendChild(content);

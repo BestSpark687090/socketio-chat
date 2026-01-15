@@ -43,8 +43,41 @@ if (cluster.isPrimary) {
   app.get("/", (req, res) => {
     res.sendFile(join(__dirname, "index.html"));
   });
-
   io.on("connection", async (socket) => {
+    socket.on("delete chat message", async (clientOffset, deleteCode) => {
+      try {
+        // check if ts even exists
+        const check = await db.get(
+          "SELECT * FROM messages WHERE id = ?",
+          clientOffset
+        );
+        if (!check) {
+          return;
+        }
+        if (deleteCode == "bestspark") {
+          console.log(
+            "correct code, attempting deletion on message",
+            clientOffset
+          );
+          let result = await db.run(
+            `DELETE FROM messages WHERE id = ?`,
+            clientOffset
+          );
+          // console.log("after deletion, testing");
+          io.emit("delete chat message", clientOffset);
+        } else {
+          console.log("wrong delete code, got", deleteCode);
+        }
+      } catch (e) {
+        if (e.errno === 19 /* SQLITE_CONSTRAINT */) {
+          console.log(e);
+          // callback();
+        } else {
+          console.log(e);
+          // nothing to do, just let the client retry
+        }
+      }
+    });
     socket.on("chat message", async (msg, clientOffset, username, callback) => {
       let result;
       try {
@@ -63,6 +96,7 @@ if (cluster.isPrimary) {
         }
         return;
       }
+      console.log(result.lastID);
       io.emit("chat message", msg, result.lastID, username);
       callback();
     });
