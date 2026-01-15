@@ -26,6 +26,7 @@ if (cluster.isPrimary) {
     CREATE TABLE IF NOT EXISTS messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       client_offset TEXT UNIQUE,
+      username TEXT,
       content TEXT
     );
   `);
@@ -44,36 +45,39 @@ if (cluster.isPrimary) {
   });
 
   io.on("connection", async (socket) => {
-    socket.on("chat message", async (msg, clientOffset, callback) => {
+    socket.on("chat message", async (msg, clientOffset, username, callback) => {
       let result;
       try {
         result = await db.run(
-          "INSERT INTO messages (content, client_offset) VALUES (?, ?)",
+          "INSERT INTO messages (content, client_offset, username) VALUES (?, ?, ?)",
           msg,
-          clientOffset
+          clientOffset,
+          username
         );
       } catch (e) {
         if (e.errno === 19 /* SQLITE_CONSTRAINT */) {
           callback();
         } else {
+          console.log(e);
           // nothing to do, just let the client retry
         }
         return;
       }
-      io.emit("chat message", msg, result.lastID);
+      io.emit("chat message", msg, result.lastID, username);
       callback();
     });
 
     if (!socket.recovered) {
       try {
         await db.each(
-          "SELECT id, content FROM messages WHERE id > ?",
+          "SELECT id, content, username FROM messages WHERE id > ?",
           [socket.handshake.auth.serverOffset || 0],
           (_err, row) => {
-            socket.emit("chat message", row.content, row.id);
+            socket.emit("chat message", row.content, row.id, row.username);
           }
         );
       } catch (e) {
+        console.log(e);
         // something went wrong
       }
     }
